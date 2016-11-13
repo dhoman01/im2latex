@@ -30,9 +30,9 @@ class Model(object):
         self.y_ = tf.placeholder(tf.float32, shape=[None, 100], name="y")
         x_image = tf.reshape(self.x, [-1,128,128,1])
 
-        self.sent_placeholder = tf.placeholder(tf.int32, shape=[1024, None, None], name='sent_ph')
+        self.sent_placeholder = tf.placeholder(tf.int32, shape=[1024, None], name='sent_ph')
         self.dropout_placeholder = tf.placeholder(tf.float32, name='dropout_placeholder')
-        self.targets_placeholder = tf.placeholder(tf.int32, shape=[args.batch_size, None], name='targets')
+        self.targets_placeholder = tf.placeholder(tf.int32, shape=[1024, None], name='targets')
 
         self.vocab = Vocab().id2vocab
         self.vocab_size = len(self.vocab)
@@ -60,6 +60,7 @@ class Model(object):
             print 'Sent:', sent_inputs.get_shape()
 
         with tf.variable_scope("all_input"):
+            h_pool2 = tf.reshape(h_pool2, [1024, 15 * 15, 64])
             all_inputs = tf.concat(1, [h_pool2, sent_inputs])
             print 'All: ', all_inputs.get_shape()
 
@@ -67,7 +68,7 @@ class Model(object):
             lstm = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_size, forget_bias=1)
             lstm_dropout = tf.nn.rnn_cell.DropoutWrapper(lstm, input_keep_prob=self.dropout_placeholder,output_keep_prob=self.dropout_placeholder)
             stacked_lstm = tf.nn.rnn_cell.MultiRNNCell([lstm_dropout] * args.num_layers)
-            initial_state = stacked_lstm.zero_state(args.batch_size, tf.float32)
+            initial_state = stacked_lstm.zero_state(1024, tf.float32)
             lstm_output, final_state = tf.nn.dynamic_rnn(stacked_lstm, all_inputs, initial_state=initial_state)
             self.final_state = final_state
 

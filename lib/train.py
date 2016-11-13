@@ -2,6 +2,7 @@ import os
 import time
 
 import tensorflow as tf
+import numpy as np
 
 from model import Model
 from utils import im2latexArgumentParser, DataLoader
@@ -52,15 +53,17 @@ def train(args):
         sess.run(tf.initialize_all_variables())
         saver = tf.train.Saver(tf.all_variables())
         checkpoint_path = os.path.join(args.train_dir, 'model.ckpt')
-        for i in range(args.nume_epochs):
+        for i in range(args.num_epochs):
             image, markup = enumerate(data_loader.next_batch())
-            loss, _ = session.run([model.loss, train_op], feed_dict={model.sent_placeholder: markup,
+            sent = np.array([markup])
+            loss, _ = sess.run([model.loss, train_op], feed_dict={model.sent_placeholder: sent,
                                                                      model.x: image,
-                                                                     model.targets_placeholder: targets,
-                                                                     model.droput_placholder: model.keep_prob})
+                                                                     model.dropout_placeholder: model.keep_prob})
             if i % args.save_every == 0:
                 print("step %d, loss %g"%(i, loss))
                 saver.save(sess, checkpoint_path, global_step=i)
+
+        saver.save(sess, checkpoint_path)
 
 if __name__ == '__main__':
     main()
