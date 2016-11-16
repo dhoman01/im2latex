@@ -27,7 +27,7 @@ def eval(args):
         sess.run(tf.initialize_all_variables())
         saver = tf.train.Saver(tf.all_variables())
         checkpoint_path = os.path.join(args.train_dir, 'model.ckpt')
-        saver.restore(sess, checkpoint_path);
+        saver.restore(sess, checkpoint_path)
         print("\ntest accuracy %g" % model.accuracy.eval(feed_dict={
             model.x: data_loader.test.images, model.y_: data_loader.test.labels, model.keep_prob: 1.0}))
 
