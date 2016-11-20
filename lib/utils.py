@@ -3,6 +3,7 @@ import argparse
 import linecache
 import random
 from PIL import Image, ImageFilter
+from latex_vocab import Vocab
 
 import numpy as np
 
@@ -36,6 +37,7 @@ class im2latexArgumentParser(object):
 
 class DataLoader(object):
     def __init__(self, data_dir="data_dir", batch_size=50, num_epochs=100, num_threads=1, train=True):
+        self.vocab = Vocab()
         self.data_dir = data_dir
         self.batch_size = batch_size
         self.num_epochs = num_epochs
@@ -71,7 +73,7 @@ class DataLoader(object):
     def get_example(self, batch):
         raw_image, label = self.decoder(batch)
         example = self.preprocess(raw_image)
-        print("size %d" % example.size)
+        label = self.latex2vec(label)
         return example, label
 
     def decoder(self, batch):
@@ -80,8 +82,6 @@ class DataLoader(object):
 
         label_path = os.path.join(self.data_dir, "im2latex_formulas.lst")
         formula_line = int(batch[1]) + 1
-        print("formula_line: %d" % formula_line)
-        print("key: %s" % batch[0])
         label = linecache.getline(label_path, formula_line).rstrip('\n')
         return raw_image, label
 
@@ -93,3 +93,20 @@ class DataLoader(object):
             example = example.filter(ImageFilter.GaussianBlur(radius=1))
         example = np.array(example)
         return example
+
+    def latex2vec(self, label):
+        print("label: %s" % label)
+        dic = self.vocab.id2vocab;
+        vec = []
+        count = 0
+        m = len(label)
+        while len(label) > 0 and count < m * 2:
+            count += 1
+            for i in range(len(label)):
+                if label[:i] in dic:
+                    vec.append(label[:i])
+                    label = label[i:]
+                if len(label) == 1:
+                    vec.append(label)
+                    label = ''
+        return vec

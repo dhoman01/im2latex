@@ -1,9 +1,9 @@
 class Vocab(object):
     def __init__(self):
-        self.id2vocab = ['!',
+        self.id2vocab = {'!',
             '"',
             '&',
-            '\'',
+            '\\',
             '(',
             ')',
             '*',
@@ -73,7 +73,7 @@ class Vocab(object):
             '\\!',
             '\\#',
             '\\&',
-            '\\\'',
+            '\\\\',
             '\\*',
             '\\,',
             '\\-',
@@ -520,4 +520,5 @@ class Vocab(object):
             '{',
             '|',
             '}',
-            '~']
+            '~',
+            ' '}

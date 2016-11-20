@@ -54,9 +54,10 @@ def train(args):
         saver = tf.train.Saver(tf.all_variables())
         checkpoint_path = os.path.join(args.train_dir, 'model.ckpt')
         for i in range(args.num_epochs):
-            image, markup = enumerate(data_loader.next_batch())
+            image, markup = data_loader.next_batch()
+            markup = tf.string_to_hash_bucket_fast(markup, 1)
             sent = np.array([markup])
-            loss, _ = sess.run([model.loss, train_op], feed_dict={model.sent_placeholder: sent,
+            loss, _ = sess.run([model.loss, train_op], feed_dict={model.sent_placeholder: image,
                                                                      model.x: image,
                                                                      model.dropout_placeholder: model.keep_prob})
             if i % args.save_every == 0:
