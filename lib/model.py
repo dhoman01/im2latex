@@ -1,103 +1,79 @@
-import numpy as np
 import tensorflow as tf
 
-from latex_vocab import Vocab
+class CNN(object):
+    def __init__(self, mode, config):
+        self.mode = mode
+        self.config = config
 
-class Model(object):
-    def __init__(self, args):
-        # convinence functions
-        def weight_variable(shape):
-            initial = tf.truncated_normal(shape, stddev=0.1)
-            return tf.Variable(initial)
+    def is_training(self):
+        return self.mode == "train"
 
-        def bias_variable(shape):
-            initial = tf.constant(0.1, shape=shape)
-            return tf.Variable(initial)
+    def build_cnn_layer(self, inputs, num_outputs, strides, filter_size,
+                        padding, initializer, scope):
+        conv = tf.contrib.layers.convolution2d(inputs,
+                                               num_outputs=num_outputs,
+                                               kernel_size=filter_size
+                                               strides=strides,
+                                               padding=padding,
+                                               rate=1,
+                                               activation_fn=None,
+                                               weights_initializer=initializer,
+                                               bias_initializer=initializer,
+                                               trainable=self.is_training(),
+                                               scope=scope)
+        conv = tf.nn.relu(conv)
+        pool = tf.contrib.layers.max_pool2d(conv, filter_size, strides, padding,scope=scope)
+        return pool
 
-        def conv2d(x, W):
-          return tf.nn.conv2d(x, W, strides=[1, 1, 1, 1], padding='SAME')
+    def get_net(self, inputs, scope):
+        layer = build_cnn_layer(inputs,
+                                num_outputs=self.config.num_outputs,
+                                strides=self.config.strides,
+                                filter_size=self.config.filter_size,
+                                padding=self.config.padding,
+                                initializer=self.config.initializer,
+                                scope=scope)
+        for i in range(self.config.num_layers - 1):
+            layer = build_cnn_layer(layer,
+                                    num_outputs=self.config.num_outputs,
+                                    strides=self.config.strides,
+                                    filter_size=self.config.filter_size,
+                                    padding=self.config.padding,
+                                    initializer=self.config.initializer,
+                                    scope=scope)
+        return layer
 
-        def max_pool_2x2(x):
-          return tf.nn.max_pool(x, ksize=[1, 2, 2, 1],
-                                strides=[1, 2, 2, 1], padding='SAME')
+class ImageEmbeddings(object):
+    def __init__(self, mode, config):
+        self.mode = mode
+        self.config = config
 
-        def max_pool_3x3(x):
-          return tf.nn.max_pool(x, ksize=[1, 3, 3, 1],
-                                strides=[1, 3, 3, 1], padding='SAME')
+    def is_training(self):
+        return self.mode == "train"
 
-        # placeholders
-        self.x = tf.placeholder(tf.float32, shape=[4096, 4096], name="x")
-        self.y_ = tf.placeholder(tf.float32, shape=[None, 100], name="y")
-        x_image = tf.reshape(self.x, [-1,128,128,1])
+    def get_image_embeddings(self, images):
+        cnn = CNN(self.mode, self.config.cnn_config)
+        with tf.variable_scope("cnn") as scope:
+            cnn_outputs = cnn.get_net(images, scope)
 
-        self.sent_placeholder = tf.placeholder(tf.int32, shape=[1024, None], name='sent_ph')
-        self.dropout_placeholder = tf.placeholder(tf.float32, name='dropout_placeholder')
-        self.targets_placeholder = tf.placeholder(tf.int32, shape=[1024, None], name='targets')
+        with tf.variable_scope("image_embeddings") as scope:
+            image_embeddings = tf.contrib.layers.fully_connected(
+              inputs=cnn_outputs,
+              num_outputs=self.config.embedding_size,
+              activation_fn=None,
+              weights_initializer=self.initializer,
+              biases_initializer=self.initializer,
+              scope=scope)
 
-        self.vocab = Vocab().id2vocab
-        self.vocab_size = len(self.vocab)
+        # Save the embedding size in the graph.
+        tf.constant(self.config.embedding_size, name="embedding_size")
 
-        with tf.variable_scope('encode_cnn'):
-            # First CNN layer (encoder)
-            W_conv1 = weight_variable([5,5,1,32])
-            b_conv1 = bias_variable([32])
+        return image_embeddings
 
-            h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)
-            h_pool1 = max_pool_3x3(h_conv1)
+class seq2seq_Attention(object):
+    def __init__(self, mode, config):
+        self.mode = mode
+        self.config = config
 
-        with tf.variable_scope('hidden_cnn_1'):
-            # Hidden CNN Layer 1
-            W_conv2 = weight_variable([5, 5, 32, 64])
-            b_conv2 = bias_variable([64])
-
-            h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)
-            h_pool2 = max_pool_3x3(h_conv2)
-            print 'Img: ', h_pool2.get_shape()
-
-        with tf.variable_scope("sent_input"):
-            word_embeddings = tf.get_variable('word_embeddings', shape=[self.vocab_size, 64])
-            sent_inputs = tf.nn.embedding_lookup(word_embeddings, self.sent_placeholder)
-            print 'Sent:', sent_inputs.get_shape()
-
-        with tf.variable_scope("all_input"):
-            h_pool2 = tf.reshape(h_pool2, [1024, 15 * 15, 64])
-            all_inputs = tf.concat(1, [h_pool2, sent_inputs])
-            print 'All: ', all_inputs.get_shape()
-
-        with tf.variable_scope("lstm"):
-            lstm = tf.nn.rnn_cell.BasicLSTMCell(args.rnn_size, forget_bias=1)
-            lstm_dropout = tf.nn.rnn_cell.DropoutWrapper(lstm, input_keep_prob=self.dropout_placeholder,output_keep_prob=self.dropout_placeholder)
-            stacked_lstm = tf.nn.rnn_cell.MultiRNNCell([lstm_dropout] * args.num_layers)
-            initial_state = stacked_lstm.zero_state(1024, tf.float32)
-            lstm_output, final_state = tf.nn.dynamic_rnn(stacked_lstm, all_inputs, initial_state=initial_state)
-            self.final_state = final_state
-
-        with tf.variable_scope('hidden_dnn'):
-            # Fully-Connected DNN 1
-            W_fc1 = weight_variable([8 * 8 * 64, 1024])
-            b_fc1 = bias_variable([1024])
-
-            lstm_output = tf.reshape(lstm_output, [-1, 8 * 8 * 64])
-            h_fc1 = tf.nn.relu(tf.matmul(lstm_output, W_fc1) + b_fc1)
-
-            self.keep_prob = tf.placeholder(tf.float32)
-            h_fc1_drop = tf.nn.dropout(h_fc1, self.keep_prob)
-
-        with tf.variable_scope('output_dnn'):
-            # Fully-Connected DNN 2
-            W_fc2 = weight_variable([1024, 100])
-            b_fc2 = bias_variable([100])
-
-        logits = tf.matmul(h_fc1_drop, W_fc2) + b_fc2
-
-        targets_reshaped = tf.reshape(self.targets_placeholder,[-1])
-        with tf.variable_scope('loss'):
-            self.loss = loss = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(logits, targets_reshaped, name="ce_loss"))
-
-        with tf.variable_scope('optimizer'):
-            self.train_op = tf.train.AdamOptimizer(1e-4).minimize(loss)
-            #train variables
-            # self.correct_prediction = tf.equal(tf.argmax(y_conv,1), tf.argmax(self.y_,1))
-            # self.accuracy = tf.reduce_mean(tf.cast(self.correct_prediction, tf.float32))
-            # self.cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y_conv, self.y_))
-            # self.train_op = tf.train.AdamOptimizer(1e-4).minimize(self.cross_entropy)
+    def get_final_state(self, image_embeddings, labels):
+        lstm_cell = tf.rnn_cell.LSTMBasicCell()
