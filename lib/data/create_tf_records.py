@@ -26,6 +26,8 @@ tf.flags.DEFINE_string("val_formulas_file", os.path.join(os.path.expanduser('~')
 tf.flags.DEFINE_string("test_formulas_file", os.path.join(os.path.expanduser('~'), "im2latex/data_dir/im2latex_test.lst"),
                        "Test formulas LST file.")
 
+tf.flags.DEFINE_string("images_dir", os.path.join(os.path.expanduser('~'), "im2latex/data_dir/formula_images"),
+                       "Directory containing images of LaTeX formulas")
 tf.flags.DEFINE_string("formulas_file", os.path.join(os.path.expanduser('~'), "im2latex/data_dir/im2latex_formulas.lst"),
                        "Latex Formula LST file.")
 
@@ -324,7 +326,7 @@ def _load_and_process_metadata(formulas_file):
     image_metadata = []
     num_formulas = 0
     for image_id, base_filename, formula_line in id_to_filename:
-        filename = os.path.join("data_dir/formula_images", base_filename)
+        filename = os.path.join(FLAGS.images_dir, base_filename)
         image_metadata.append(ImageMetadata(image_id, filename, formula_line))
         num_formulas += 1
     print("Finished processing %d LaTeX formulas in %s" %
