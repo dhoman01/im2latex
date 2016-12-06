@@ -1,2 +1,4 @@
 data_dir/
 MNIST_data/
+train_dir/
+*.pyc
