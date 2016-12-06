@@ -12,7 +12,7 @@ class CNN(object):
                         padding, initializer, scope):
         conv = tf.contrib.layers.convolution2d(inputs,
                                                num_outputs=num_outputs,
-                                               kernel_size=filter_size
+                                               kernel_size=filter_size,
                                                strides=strides,
                                                padding=padding,
                                                rate=1,
