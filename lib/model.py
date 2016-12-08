@@ -23,8 +23,9 @@ from __future__ import print_function
 
 import tensorflow as tf
 
-from tensorflow.core.protobuf import config_pb2
-import time
+from ops import image_embeddings as cnn
+from ops import image_processing
+from ops import inputs as input_ops
 
 class ShowAttendTellModel(object):
     def __init__(self, mode, config):
@@ -34,74 +35,99 @@ class ShowAttendTellModel(object):
                 minval=-config.initializer_scale,
                 maxval=config.initializer_scale)
 
-        self.inputs = tf.placeholder(tf.float32, shape=[None, 1500, 1500, 3])
-        self.input_seqs = tf.placeholder(tf.int32, shape=[None, None])
+        # Reader for the input data.
+        self.reader = tf.TFRecordReader()
 
-        def _conv_f(inputs, num_outputs, filter_size, stride, padding,
-                    initializer, reuse, trainable, scope):
-            return tf.contrib.layers.convolution2d(inputs,
-                                            num_outputs=num_outputs,
-                                            kernel_size=filter_size,
-                                            stride=stride,
-                                            padding=padding,
-                                            rate=None,
-                                            activation_fn=None,
-                                            weights_initializer=initializer,
-                                            biases_initializer=initializer,
-                                            reuse=reuse,
-                                            trainable=trainable,
-                                            scope=scope)
-        def _fc_f(inputs, num_outputs, initializer, reuse, scope):
-            return tf.contrib.layers.fully_connected(inputs,
-                                            num_outputs=num_outputs,
-                                            weights_initializer=initializer,
-                                            biases_initializer=initializer,
-                                            reuse=reuse,
-                                            scope=scope)
+    def is_training(self):
+        return self.mode == "train"
 
-        with tf.variable_scope("cnn_input_1", initializer=self.initializer) as scope:
-            conv_1_1 = _conv_f(self.inputs, 750, 2, 2, "SAME", self.initializer, False, True, scope)
-            relu_1_1 = tf.nn.relu(conv_1_1)
-            max_pool_1_1 = tf.contrib.layers.max_pool2d(relu_1_1, 2, 2, "SAME")
+    def process_image(self, encoded_image, thread_id=0):
+        return image_processing.process_image(encoded_image,
+                                              thread_id=thread_id)
 
-        with tf.variable_scope("cnn_hidden_1", initializer=self.initializer) as scope:
-            conv_1_2 = _conv_f(max_pool_1_1, 375, 2, 2, "SAME", self.initializer, False, True, scope)
-            relu_1_2 = tf.nn.relu(conv_1_2)
-            max_pool_1_2 = tf.contrib.layers.max_pool2d(relu_1_2, 2, 2, "SAME")
+    def build_inputs(self):
+        if self.mode == "inference":
+            # In inference mode, images and inputs are fed via placeholders.
+            image_feed = tf.placeholder(dtype=tf.string, shape=[], name="image_feed")
+            input_feed = tf.placeholder(dtype=tf.int64,
+                                      shape=[None],  # batch_size
+                                      name="input_feed")
 
-        with tf.variable_scope("cnn_fc_1", initializer=self.initializer) as scope:
-            fc_1 = _fc_f(max_pool_1_2, config.embedding_size, self.initializer, False, scope)
+            # Process image and insert batch dimensions.
+            images = tf.expand_dims(self.process_image(image_feed), 0)
+            input_seqs = tf.expand_dims(input_feed, 1)
+
+            # No target sequences or input mask in inference mode.
+            target_seqs = None
+            input_mask = None
+        else:
+            # Prefetch serialized SequenceExample protos.
+            input_queue = input_ops.prefetch_input_data(
+                self.reader,
+                self.config.input_file_pattern,
+                is_training=self.is_training(),
+                batch_size=self.config.batch_size,
+                values_per_shard=self.config.values_per_input_shard,
+                input_queue_capacity_factor=self.config.input_queue_capacity_factor,
+                num_reader_threads=self.config.num_input_reader_threads)
+
+        assert self.config.num_preprocess_threads % 2 == 0
+        images_and_captions = []
+        for thread_id in range(self.config.num_preprocess_threads):
+            serialized_sequence_example = input_queue.dequeue()
+            encoded_image, caption = input_ops.parse_sequence_example(
+                serialized_sequence_example,
+                image_feature=self.config.image_feature_name,
+                caption_feature=self.config.caption_feature_name)
+            image = self.process_image(encoded_image, thread_id=thread_id)
+            images_and_captions.append([image, caption])
+
+        # Batch inputs.
+        queue_capacity = (2 * self.config.num_preprocess_threads *
+            self.config.batch_size)
+        images, input_seqs, target_seqs, input_mask = (
+            input_ops.batch_with_dynamic_pad(images_and_captions,
+            batch_size=self.config.batch_size,
+            queue_capacity=queue_capacity))
+
+        self.images = images
+        self.input_seqs = input_seqs
+        self.target_seqs = target_seqs
+        self.input_mask = input_mask
+
+    def build_model(self):
+        with tf.variable_scope("image_embeddings") as scope:
+            cnn_outputs = cnn.cnn(self.images, self.config, self.initializer)
+            self.image_embeddings = tf.squeeze(cnn_outputs)
 
         tf.constant(self.config.embedding_size, name="embedding_size")
-
-        self.image_embeddings = tf.reshape(fc_1, shape=[-1, config.embedding_size])
 
         with tf.variable_scope("seq_embedding"), tf.device("/cpu:0"):
             embedding_map = tf.get_variable(
                 name="map",
-                shape=[config.vocab_size, config.embedding_size],
+                shape=[self.config.vocab_size, self.config.embedding_size],
                 initializer=self.initializer)
             seq_embeddings = tf.nn.embedding_lookup(embedding_map, self.input_seqs)
 
         self.seq_embeddings = seq_embeddings
 
-        lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(config.rnn_size)
+        lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(self.config.rnn_size)
 
-        if mode == "train":
+        if self.mode == "train":
             lstm_cell = tf.nn.rnn_cell.DropoutWrapper(lstm_cell,
-                            input_keep_prob=config.lstm_dropout_keep_prob,
-                            output_keep_prob=config.lstm_dropout_keep_prob)
+                            input_keep_prob=self.config.lstm_dropout_keep_prob,
+                            output_keep_prob=self.config.lstm_dropout_keep_prob)
 
-        lstm_cell = tf.contrib.rnn.AttentionCellWrapper(lstm_cell, 1, input_size=512, state_is_tuple=True)
+        # lstm_cell = tf.contrib.rnn.AttentionCellWrapper(lstm_cell, 1, input_size=self.config.embedding_size, state_is_tuple=True)
 
-        if config.rnn_layers > 1:
-            lstm_cell = tf.nn.rnn_cell.MultiRNNCell([lstm_cell] * config.rnn_layers)
+        if self.config.rnn_layers > 1:
+            lstm_cell = tf.nn.rnn_cell.MultiRNNCell([lstm_cell] * self.config.rnn_layers)
 
 
         self.lstm_cell = lstm_cell
 
         with tf.variable_scope("attend-tell", initializer=self.initializer) as attend_scope:
-            zero_state = lstm_cell.zero_state(batch_size=config.batch_size, dtype=tf.float32)
+            zero_state = lstm_cell.zero_state(batch_size=self.config.batch_size, dtype=tf.float32)
             _, initial_state = lstm_cell(self.image_embeddings, zero_state)
 
             attend_scope.reuse_variables()
@@ -126,7 +152,7 @@ class ShowAttendTellModel(object):
                 tf.concat(1, state_tuple, name="state")
             else:
                 # Run the batch of sequence embeddings through the LSTM.
-                sequence_length = tf.reduce_sum(self.seq_embeddings, 1)
+                sequence_length = tf.reduce_sum(self.input_mask, 1)
                 lstm_outputs, _ = tf.nn.dynamic_rnn(cell=lstm_cell,
                                                     inputs=self.seq_embeddings,
                                                     sequence_length=sequence_length,
@@ -138,14 +164,14 @@ class ShowAttendTellModel(object):
         lstm_outputs = tf.reshape(lstm_outputs, [-1, lstm_cell.output_size])
 
         with tf.variable_scope("logits") as logits_scope:
-            logits = _fc_f(lstm_outputs, config.vocab_size, self.initializer, False, logits_scope)
+            logits = cnn._fc_f(lstm_outputs, self.config.vocab_size, self.initializer, False, logits_scope)
 
         # if infering perform simple softmax
-        if mode == "inference":
+        if self.mode == "inference":
             tf.nn.softmax(logits, name="softmax")
         else:
-            targets = tf.reshape(self.input_seqs, [-1])
-            weights = tf.to_float(tf.reshape(self.input_seqs, [-1]))
+            targets = tf.reshape(self.target_seqs, [-1])
+            weights = tf.to_float(tf.reshape(self.input_mask, [-1]))
 
             # Compute losses.
             losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits, targets)
@@ -171,15 +197,15 @@ class ShowAttendTellModel(object):
             trainable=False,
             collections=[tf.GraphKeys.GLOBAL_STEP, tf.GraphKeys.VARIABLES])
 
-        learning_rate = tf.constant(config.initial_learning_rate)
-        num_batches_per_epoch = (config.num_examples_per_epoch / config.batch_size)
-        decay_steps = int(num_batches_per_epoch * config.num_epochs_per_decay)
+        learning_rate = tf.constant(self.config.initial_learning_rate)
+        num_batches_per_epoch = (self.config.num_examples_per_epoch / self.config.batch_size)
+        decay_steps = int(num_batches_per_epoch * self.config.num_epochs_per_decay)
 
         def _learning_rate_decay_fn(learning_rate, global_step):
             return tf.train.exponential_decay(learning_rate,
                                           global_step,
                                           decay_steps=decay_steps,
-                                          decay_rate=config.learning_rate_decay_factor,
+                                          decay_rate=self.config.learning_rate_decay_factor,
                                           staircase=True)
 
         learning_rate_decay_fn = _learning_rate_decay_fn
@@ -188,56 +214,12 @@ class ShowAttendTellModel(object):
             loss=self.total_loss,
             global_step=self.global_step,
             learning_rate=learning_rate,
-            optimizer=config.optimizer,
-            clip_gradients=config.clip_gradients,
+            optimizer=self.config.optimizer,
+            clip_gradients=self.config.clip_gradients,
             learning_rate_decay_fn=learning_rate_decay_fn)
 
-        self.saver = tf.train.Saver(max_to_keep=config.max_checkpoints_to_keep)
+        self.saver = tf.train.Saver(max_to_keep=self.config.max_checkpoints_to_keep)
 
-    def step(self, sess, train_op, global_step, train_step_kwargs):
-        start_time = time.time()
-        print("%s: Starting step" % start_time)
-        trace_run_options = None
-        run_metadata = None
-        if 'should_trace' in train_step_kwargs:
-            if 'logdir' not in train_step_kwargs:
-                raise ValueError('logdir must be present in train_step_kwargs when '
-                    'should_trace is present')
-            if sess.run(train_step_kwargs['should_trace']):
-                trace_run_options = config_pb2.RunOptions(
-                    trace_level=config_pb2.RunOptions.FULL_TRACE)
-                run_metadata = config_pb2.RunMetadata()
-
-
-        total_loss, np_global_step = sess.run([train_op, global_step],
-                                              options=trace_run_options,
-                                              run_metadata=run_metadata,
-                                              feed_dict=train_step_kwargs['feed_dict'])
-
-        time_elapsed = time.time() - start_time
-
-        print("%s: Time elapsed" % time_elapsed)
-
-
-        if run_metadata is not None:
-            tl = timeline.Timeline(run_metadata.step_stats)
-            trace = tl.generate_chrome_trace_format()
-            trace_filename = os.path.join(train_step_kwargs['logdir'],
-                'tf_trace-%d.json' % np_global_step)
-            logging.info('Writing trace to %s', trace_filename)
-            file_io.write_string_to_file(trace_filename, trace)
-            if 'summary_writer' in train_step_kwargs:
-                train_step_kwargs['summary_writer'].add_run_metadata(
-                    run_metadata, 'run_metadata-%d' % np_global_step)
-
-        if 'should_log' in train_step_kwargs:
-            if sess.run(train_step_kwargs['should_log']):
-                logging.info('global step %d: loss = %.4f (%.2f sec/step)',
-                    np_global_step, total_loss, time_elapsed)
-
-        if 'should_stop' in train_step_kwargs:
-            should_stop = sess.run(train_step_kwargs['should_stop'])
-        else:
-            should_stop = False
-
-        return total_loss, should_stop
+    def build(self):
+        self.build_inputs()
+        self.build_model()
