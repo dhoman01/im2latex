@@ -37,7 +37,7 @@ SCRATCH_DIR="${OUTPUT_DIR}"
 mkdir -p "${OUTPUT_DIR}"
 mkdir -p "${SCRATCH_DIR}"
 CURRENT_DIR=$(pwd)
-WORK_DIR="$0.runfiles/im2txt/im2txt"
+WORK_DIR="$0.runfiles/im2latex/im2latex"
 
 # Helper function to download and unpack a .zip file.
 function download_and_unzip() {
