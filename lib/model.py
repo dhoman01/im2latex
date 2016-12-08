@@ -1,4 +1,29 @@
+# Copyright 2016 Dustin E. Homan. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
+"""Show, attend, and tell Model. Based on https://arxiv.org/pdf/1502.03044.pdf"""
+
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
+
+
 import tensorflow as tf
+
+from tensorflow.core.protobuf import config_pb2
 import time
 
 class ShowAttendTellModel(object):
@@ -61,14 +86,13 @@ class ShowAttendTellModel(object):
         self.seq_embeddings = seq_embeddings
 
         lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(config.rnn_size)
+
         if mode == "train":
             lstm_cell = tf.nn.rnn_cell.DropoutWrapper(lstm_cell,
                             input_keep_prob=config.lstm_dropout_keep_prob,
                             output_keep_prob=config.lstm_dropout_keep_prob)
 
-        print("lstm_cell.output_size %s" % lstm_cell.output_size)
-
-        # lstm_cell = tf.contrib.rnn.AttentionCellWrapper(lstm_cell, config.attn_length, input_size=512 * 512, state_is_tuple=True)
+        lstm_cell = tf.contrib.rnn.AttentionCellWrapper(lstm_cell, 1, input_size=512, state_is_tuple=True)
 
         if config.rnn_layers > 1:
             lstm_cell = tf.nn.rnn_cell.MultiRNNCell([lstm_cell] * config.rnn_layers)
@@ -172,6 +196,7 @@ class ShowAttendTellModel(object):
 
     def step(self, sess, train_op, global_step, train_step_kwargs):
         start_time = time.time()
+        print("%s: Starting step" % start_time)
         trace_run_options = None
         run_metadata = None
         if 'should_trace' in train_step_kwargs:
@@ -183,12 +208,16 @@ class ShowAttendTellModel(object):
                     trace_level=config_pb2.RunOptions.FULL_TRACE)
                 run_metadata = config_pb2.RunMetadata()
 
-        total_loss ,np_global_step = sess.run([train_op, global_step],
+
+        total_loss, np_global_step = sess.run([train_op, global_step],
                                               options=trace_run_options,
                                               run_metadata=run_metadata,
                                               feed_dict=train_step_kwargs['feed_dict'])
 
         time_elapsed = time.time() - start_time
+
+        print("%s: Time elapsed" % time_elapsed)
+
 
         if run_metadata is not None:
             tl = timeline.Timeline(run_metadata.step_stats)

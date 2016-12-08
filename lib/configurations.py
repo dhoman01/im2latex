@@ -13,7 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 
-"""CNN model and SAT configurations."""
+"""Model and Training Configurations."""
 
 from __future__ import absolute_import
 from __future__ import division

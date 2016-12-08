@@ -37,7 +37,7 @@ tf.flags.DEFINE_string("train_dir", "",
                        "Directory for saving and loading model checkpoints.")
 tf.flags.DEFINE_boolean("train_inception", False,
                         "Whether to train inception submodel variables.")
-tf.flags.DEFINE_integer("number_of_steps", 1000000, "Number of training steps.")
+tf.flags.DEFINE_integer("number_of_steps", 10, "Number of training steps.")
 tf.flags.DEFINE_integer("log_every_n_steps", 1,
                         "Frequency at which loss and global step are logged.")
 
@@ -61,16 +61,16 @@ def main(_):
     train_step_kwargs['feed_dict'] = _feed_fn()
 
 
-    tf.contrib.slim.learning.train(
-        model.train_op,
-        config.train_dir,
-        train_step_fn=model.step,
-        train_step_kwargs=train_step_kwargs,
-        log_every_n_steps=FLAGS.log_every_n_steps,
-        graph=g,
-        global_step=model.global_step,
-        number_of_steps=FLAGS.number_of_steps,
-        saver=model.saver)
+    # tf.contrib.slim.learning.train(
+    #     model.train_op,
+    #     config.train_dir,
+    #     train_step_fn=model.step,
+    #     train_step_kwargs=train_step_kwargs,
+    #     log_every_n_steps=FLAGS.log_every_n_steps,
+    #     graph=g,
+    #     global_step=model.global_step,
+    #     number_of_steps=FLAGS.number_of_steps,
+    #     saver=model.saver)
 
 if __name__ == "__main__":
   tf.app.run()
