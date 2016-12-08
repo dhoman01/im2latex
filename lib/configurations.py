@@ -19,24 +19,23 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-class CNNConfigurations(object):
-    # The number of outputs filters for a CNN layer
-    # should be batch_size * image_height * image_width * image_channels
-    self.num_outputs = 50 * 256 * 256 * 3
+class Configurations(object):
+    def __init__(self):
+        self.vocab_size = 16000
+        self.batch_size = 16
+        self.initializer_scale = 0.08
+        self.lstm_dropout_keep_prob = 0.7
+        self.num_examples_per_epoch=84000
+        self.optimizer = "Adam"
+        self.initial_learning_rate = 2.0
+        self.learning_rate_decay_factor = 0.1
+        self.num_epochs_per_decay = 8.0
+        self.clip_gradients = 5.0
+        self.max_checkpoints_to_keep = 2
+        self.train_dir = "train_dir"
 
-    # A sequence of N positive integers specifying the stride at which
-    # to compute output. Can be a single integer to specify the same
-    # value for all spatial dimensions.
-    self.strides = [1, 2, 2, 1]
-
-    # A sequence of N positive integers specifying the spatial
-    # dimensions of of the filters. Can be a single integer
-    # to specify the same value for all spatial dimensions.
-    self.filter_size = [1, 2, 2, 1]
-
-    # one of "VALID" or "SAME".
-    self.padding = "VALID"
-
-    self.initializer = tf.random_uniform_initializer(
-        minval=-0.08,
-        maxval=0.08)
+        # LSTM input and output dimensionality, respectively.
+        self.embedding_size = 512
+        self.rnn_size = 512
+        self.rnn_layers = 3
+        self.attn_length = 512

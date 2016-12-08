@@ -1,172 +1,214 @@
 import tensorflow as tf
+import time
 
-class CNN(object):
+class ShowAttendTellModel(object):
     def __init__(self, mode, config):
         self.mode = mode
         self.config = config
+        self.initializer = tf.random_uniform_initializer(
+                minval=-config.initializer_scale,
+                maxval=config.initializer_scale)
 
-    def is_training(self):
-        return self.mode == "train"
+        self.inputs = tf.placeholder(tf.float32, shape=[None, 1500, 1500, 3])
+        self.input_seqs = tf.placeholder(tf.int32, shape=[None, None])
 
-    def build_cnn_layer(self, inputs, num_outputs, strides, filter_size,
-                        padding, initializer, scope):
-        conv = tf.contrib.layers.convolution2d(inputs,
-                                               num_outputs=num_outputs,
-                                               kernel_size=filter_size,
-                                               strides=strides,
-                                               padding=padding,
-                                               rate=1,
-                                               activation_fn=None,
-                                               weights_initializer=initializer,
-                                               bias_initializer=initializer,
-                                               trainable=self.is_training(),
-                                               scope=scope)
-        conv = tf.nn.relu(conv)
-        pool = tf.contrib.layers.max_pool2d(conv, filter_size, strides, padding,scope=scope)
-        return pool
+        def _conv_f(inputs, num_outputs, filter_size, stride, padding,
+                    initializer, reuse, trainable, scope):
+            return tf.contrib.layers.convolution2d(inputs,
+                                            num_outputs=num_outputs,
+                                            kernel_size=filter_size,
+                                            stride=stride,
+                                            padding=padding,
+                                            rate=None,
+                                            activation_fn=None,
+                                            weights_initializer=initializer,
+                                            biases_initializer=initializer,
+                                            reuse=reuse,
+                                            trainable=trainable,
+                                            scope=scope)
+        def _fc_f(inputs, num_outputs, initializer, reuse, scope):
+            return tf.contrib.layers.fully_connected(inputs,
+                                            num_outputs=num_outputs,
+                                            weights_initializer=initializer,
+                                            biases_initializer=initializer,
+                                            reuse=reuse,
+                                            scope=scope)
 
-    def get_net(self, inputs, scope):
-        layer = build_cnn_layer(inputs,
-                                num_outputs=self.config.num_outputs,
-                                strides=self.config.strides,
-                                filter_size=self.config.filter_size,
-                                padding=self.config.padding,
-                                initializer=self.config.initializer,
-                                scope=scope)
-        for i in range(self.config.num_layers - 1):
-            layer = build_cnn_layer(layer,
-                                    num_outputs=self.config.num_outputs,
-                                    strides=self.config.strides,
-                                    filter_size=self.config.filter_size,
-                                    padding=self.config.padding,
-                                    initializer=self.config.initializer,
-                                    scope=scope)
-        return layer
+        with tf.variable_scope("cnn_input_1", initializer=self.initializer) as scope:
+            conv_1_1 = _conv_f(self.inputs, 750, 2, 2, "SAME", self.initializer, False, True, scope)
+            relu_1_1 = tf.nn.relu(conv_1_1)
+            max_pool_1_1 = tf.contrib.layers.max_pool2d(relu_1_1, 2, 2, "SAME")
 
-class ImageEmbeddings(object):
-    def __init__(self, mode, config):
-        self.mode = mode
-        self.config = config
+        with tf.variable_scope("cnn_hidden_1", initializer=self.initializer) as scope:
+            conv_1_2 = _conv_f(max_pool_1_1, 375, 2, 2, "SAME", self.initializer, False, True, scope)
+            relu_1_2 = tf.nn.relu(conv_1_2)
+            max_pool_1_2 = tf.contrib.layers.max_pool2d(relu_1_2, 2, 2, "SAME")
 
-    def is_training(self):
-        return self.mode == "train"
+        with tf.variable_scope("cnn_fc_1", initializer=self.initializer) as scope:
+            fc_1 = _fc_f(max_pool_1_2, config.embedding_size, self.initializer, False, scope)
 
-    def get_image_embeddings(self, images):
-        cnn = CNN(self.mode, self.config.cnn_config)
-        with tf.variable_scope("show") as scope:
-            cnn_outputs = cnn.get_net(images, scope)
-
-        with tf.variable_scope("image_embeddings") as scope:
-            image_embeddings = tf.contrib.layers.fully_connected(
-              inputs=cnn_outputs,
-              num_outputs=self.config.embedding_size,
-              activation_fn=None,
-              weights_initializer=self.initializer,
-              biases_initializer=self.initializer,
-              scope=scope)
-
-        # Save the embedding size in the graph.
         tf.constant(self.config.embedding_size, name="embedding_size")
 
-        return image_embeddings
+        self.image_embeddings = tf.reshape(fc_1, shape=[-1, config.embedding_size])
 
-class Model(object):
-    def __init__(self, mode, config, buckets):
-        self.mode = mode
-        self.config = config
-        self.buckets = buckets
+        with tf.variable_scope("seq_embedding"), tf.device("/cpu:0"):
+            embedding_map = tf.get_variable(
+                name="map",
+                shape=[config.vocab_size, config.embedding_size],
+                initializer=self.initializer)
+            seq_embeddings = tf.nn.embedding_lookup(embedding_map, self.input_seqs)
 
-        lstm_cell = tf.rnn_cell.BasicLSTMCell(self.config.rnn_size)
-        if self.config.num_layers > 1:
-            lstm_cell = tf.nn.rnn_cell.MultiRNNCell([cell] * self.config.num_layers)
+        self.seq_embeddings = seq_embeddings
 
-        if self.is_training():
-            lstm_cell = tf.nn.rnn_cell.DropoutWrapper(
-                cell,
-                input_keep_prob=self.config.lstm_droput_keep_prob,
-                output_keep_prob=self.config.lstm_droput_keep_prob)
+        lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(config.rnn_size)
+        if mode == "train":
+            lstm_cell = tf.nn.rnn_cell.DropoutWrapper(lstm_cell,
+                            input_keep_prob=config.lstm_dropout_keep_prob,
+                            output_keep_prob=config.lstm_dropout_keep_prob)
+
+        print("lstm_cell.output_size %s" % lstm_cell.output_size)
+
+        # lstm_cell = tf.contrib.rnn.AttentionCellWrapper(lstm_cell, config.attn_length, input_size=512 * 512, state_is_tuple=True)
+
+        if config.rnn_layers > 1:
+            lstm_cell = tf.nn.rnn_cell.MultiRNNCell([lstm_cell] * config.rnn_layers)
+
+
+        self.lstm_cell = lstm_cell
 
         with tf.variable_scope("attend-tell", initializer=self.initializer) as attend_scope:
-             # If we use sampled softmax, we need an output projection.
-            output_projection = None
-            softmax_loss_function = None
+            zero_state = lstm_cell.zero_state(batch_size=config.batch_size, dtype=tf.float32)
+            _, initial_state = lstm_cell(self.image_embeddings, zero_state)
 
-            # Sampled softmax
-            w_t = tf.get_variable("proj_w", [self.target_vocab_size, size], dtype=dtype)
-            w = tf.transpose(w_t)
-            b = tf.get_variable("proj_b", [self.target_vocab_size], dtype=dtype)
-            output_projection = (w, b)
+            attend_scope.reuse_variables()
 
-            self.output_projection = output_projection
+            if self.mode == "inference":
+            # In inference mode, use concatenated states for convenient feeding and
+            # fetching.
+                tf.concat(1, initial_state, name="initial_state")
 
-            def sampled_loss(inputs, labels):
-                labels = tf.reshape(labels, [-1, 1])
-                # We need to compute the sampled_softmax_loss using 32bit floats to
-                # avoid numerical instabilities.
-                local_w_t = tf.cast(w_t, tf.float32)
-                local_b = tf.cast(b, tf.float32)
-                local_inputs = tf.cast(inputs, tf.float32)
-                return tf.cast(tf.nn.sampled_softmax_loss(local_w_t,
-                                            local_b,
-                                            local_inputs,
-                                            labels,
-                                            num_samples,
-                                            self.target_vocab_size), tf.float32)
-            softmax_loss_function = sampled_loss
+                # Placeholder for feeding a batch of concatenated states.
+                state_feed = tf.placeholder(dtype=tf.float32,
+                    shape=[None, sum(lstm_cell.state_size)],
+                    name="state_feed")
+                state_tuple = tf.split(1, 2, state_feed)
 
-            def seq2seq_Attention(encoder_inputs, decoder_inputs):
-                return tf.rnn.seq2seq.embedding_attention_seq2seq(
-                            encoder_inputs,
-                            decoder_inputs,
-                            lstm_cell,
-                            num_encoder_symbols=self.config.embedding_size,
-                            num_decoder_symbols=self.config.vocab_size,
-                            embedding_size=self.config.embedding_size,
-                            output_projection=output_projection,
-                            feed_previous=True,
-                            dtype=tf.float32)
+                # Run a single LSTM step.
+                lstm_outputs, state_tuple = lstm_cell(
+                    inputs=tf.squeeze(self.seq_embeddings, squeeze_dims=[1]),
+                    state=state_tuple)
 
-            self.encoder_inputs = []
-            for i in range([-1][0]):
-                self.encoder_inputs.append(tf.placeholder(tf.int32, shape=[None], name="encoder{0}".format(i)))
+                # Concatentate the resulting state.
+                tf.concat(1, state_tuple, name="state")
+            else:
+                # Run the batch of sequence embeddings through the LSTM.
+                sequence_length = tf.reduce_sum(self.seq_embeddings, 1)
+                lstm_outputs, _ = tf.nn.dynamic_rnn(cell=lstm_cell,
+                                                    inputs=self.seq_embeddings,
+                                                    sequence_length=sequence_length,
+                                                    initial_state=initial_state,
+                                                    dtype=tf.float32,
+                                                    scope=attend_scope)
 
-            for i in range(buckets[-1][1] + 1):
-                self.decoder_inputs.append(tf.placeholder(tf.int32, shape=[None], name="decoder{0}".format(i)))
-                self.target_weights.append(tf.placeholder(tf.float32, shape=[None], name="weight{0}".format(i)))
+        # Stack batches
+        lstm_outputs = tf.reshape(lstm_outputs, [-1, lstm_cell.output_size])
 
-            targets = [self.decoder_inputs[i + 1] for i in range(len(self.decoder_inputs) - 1)]
+        with tf.variable_scope("logits") as logits_scope:
+            logits = _fc_f(lstm_outputs, config.vocab_size, self.initializer, False, logits_scope)
 
-            self.outputs, self.losses = tf.nn.seq2seq.model_with_buckets(
-                self.encoder_inputs, self.decoder_inputs, targets,
-                self.target_weights, buckets, lambda x, y: seq2seq(x, y),
-                softmax_loss_function=softmax_loss_function)
+        # if infering perform simple softmax
+        if mode == "inference":
+            tf.nn.softmax(logits, name="softmax")
+        else:
+            targets = tf.reshape(self.input_seqs, [-1])
+            weights = tf.to_float(tf.reshape(self.input_seqs, [-1]))
 
-            if output_projection is not None:
-                for b in range(len(buckets)):
-                    self.outputs[b] = [tf.matmul(output, output_projection[0]) + output_projection[1]
-                                       for output in self.outputs[b]]
+            # Compute losses.
+            losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits, targets)
+            batch_loss = tf.div(tf.reduce_sum(tf.mul(losses, weights)),
+                              tf.reduce_sum(weights),
+                              name="batch_loss")
+            tf.contrib.losses.add_loss(batch_loss)
+            total_loss = tf.contrib.losses.get_total_loss()
 
-    def is_training(self):
-        return self.mode == "train"
+            # Add summaries.
+            tf.scalar_summary("batch_loss", batch_loss)
+            tf.scalar_summary("total_loss", total_loss)
+            for var in tf.trainable_variables():
+                tf.histogram_summary(var.op.name, var)
 
-    def step(self, session, encoder_inputs, decoder_inputs, target_weights, bucket_id):
-        encoder_size, decoder_size = self.buckets[bucket_id]
+            self.total_loss = total_loss
+            self.target_cross_entropy_losses = losses  # Used in evaluation.
+            self.target_cross_entropy_loss_weights = weights  # Used in evaluation.
 
-        input_feed = {}
-        for l in range(encoder_size):
-            input_feed[self.encoder_inputs[l].name] = encoder_inputs[l]
-        for l in range(decoder_size):
-            input_feed[self.decoder_inputs[l].name] = decoder_inputs[l]
-            input_feed[self.target_weights[l].name] = target_weights[l]
+        self.global_step = tf.Variable(
+            initial_value=0,
+            name="global_step",
+            trainable=False,
+            collections=[tf.GraphKeys.GLOBAL_STEP, tf.GraphKeys.VARIABLES])
 
-        # Targets are shifted by 1 so add 1 extra
-        last_target = self.decoder_inputs[decoder_size].name
-        input_feed[last_target] = np.zeros([self.confg.batch_size], dtype=np.int32)
+        learning_rate = tf.constant(config.initial_learning_rate)
+        num_batches_per_epoch = (config.num_examples_per_epoch / config.batch_size)
+        decay_steps = int(num_batches_per_epoch * config.num_epochs_per_decay)
 
-        output_feed = [self.losses[bucket_id]]
-        for l in range(decoder_size):
-            output_feed.append(self.outputs[bucket_id][l])
+        def _learning_rate_decay_fn(learning_rate, global_step):
+            return tf.train.exponential_decay(learning_rate,
+                                          global_step,
+                                          decay_steps=decay_steps,
+                                          decay_rate=config.learning_rate_decay_factor,
+                                          staircase=True)
 
-        outputs = session.run(output_feed, input_feed)
+        learning_rate_decay_fn = _learning_rate_decay_fn
 
-        return outputs[0], outputs[1:] # return loss, outputs
+        self.train_op = tf.contrib.layers.optimize_loss(
+            loss=self.total_loss,
+            global_step=self.global_step,
+            learning_rate=learning_rate,
+            optimizer=config.optimizer,
+            clip_gradients=config.clip_gradients,
+            learning_rate_decay_fn=learning_rate_decay_fn)
+
+        self.saver = tf.train.Saver(max_to_keep=config.max_checkpoints_to_keep)
+
+    def step(self, sess, train_op, global_step, train_step_kwargs):
+        start_time = time.time()
+        trace_run_options = None
+        run_metadata = None
+        if 'should_trace' in train_step_kwargs:
+            if 'logdir' not in train_step_kwargs:
+                raise ValueError('logdir must be present in train_step_kwargs when '
+                    'should_trace is present')
+            if sess.run(train_step_kwargs['should_trace']):
+                trace_run_options = config_pb2.RunOptions(
+                    trace_level=config_pb2.RunOptions.FULL_TRACE)
+                run_metadata = config_pb2.RunMetadata()
+
+        total_loss ,np_global_step = sess.run([train_op, global_step],
+                                              options=trace_run_options,
+                                              run_metadata=run_metadata,
+                                              feed_dict=train_step_kwargs['feed_dict'])
+
+        time_elapsed = time.time() - start_time
+
+        if run_metadata is not None:
+            tl = timeline.Timeline(run_metadata.step_stats)
+            trace = tl.generate_chrome_trace_format()
+            trace_filename = os.path.join(train_step_kwargs['logdir'],
+                'tf_trace-%d.json' % np_global_step)
+            logging.info('Writing trace to %s', trace_filename)
+            file_io.write_string_to_file(trace_filename, trace)
+            if 'summary_writer' in train_step_kwargs:
+                train_step_kwargs['summary_writer'].add_run_metadata(
+                    run_metadata, 'run_metadata-%d' % np_global_step)
+
+        if 'should_log' in train_step_kwargs:
+            if sess.run(train_step_kwargs['should_log']):
+                logging.info('global step %d: loss = %.4f (%.2f sec/step)',
+                    np_global_step, total_loss, time_elapsed)
+
+        if 'should_stop' in train_step_kwargs:
+            should_stop = sess.run(train_step_kwargs['should_stop'])
+        else:
+            should_stop = False
+
+        return total_loss, should_stop
