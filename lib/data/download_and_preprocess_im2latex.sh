@@ -89,8 +89,15 @@ download ${BASE_URL} ${VAL_FILE}
 TEST_FILE="im2latex_test.lst"
 download ${BASE_URL} ${TEST_FILE}
 
-# Build TFRecords of the image data.
 cd "${CURRENT_DIR}"
+# Crop the A4 image down to actual formula
+BUILD_SCRIPT="${WORK_DIR}/crop_images"
+"${BUILD_SCRIPT}" \
+  --pattern="*.png" \
+  --images_dir="${OUTPUT_DIR}/formula_images"
+
+
+# Build TFRecords of the image data.
 BUILD_SCRIPT="${WORK_DIR}/create_tf_records"
 "${BUILD_SCRIPT}" \
   --output_dir="${OUTPUT_DIR}" \

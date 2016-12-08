@@ -33,3 +33,30 @@ sh_binary(
         ":create_tf_records",
     ],
 )
+
+py_library(
+    name = "configurations",
+    srcs = ["configurations.py"],
+    srcs_version = "PY2AND3",
+)
+
+py_library(
+    name = "model",
+    srcs = ["model.py"],
+    srcs_version = "PY2AND3",
+    deps = [
+        "//im2txt/ops:image_embedding",
+        "//im2txt/ops:image_processing",
+        "//im2txt/ops:inputs",
+    ],
+)
+
+py_binary(
+    name = "train",
+    srcs = ["train.py"],
+    srcs_version = "PY2AND3",
+    deps = [
+        ":configuration",
+        ":show_and_tell_model",
+    ],
+)

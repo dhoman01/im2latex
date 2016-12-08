@@ -11,18 +11,9 @@ py_library(
 )
 
 py_library(
-    name = "image_embedding",
-    srcs = ["image_embedding.py"],
+    name = "image_embeddings",
+    srcs = ["image_embeddings.py"],
     srcs_version = "PY2AND3",
-)
-
-py_test(
-    name = "image_embedding_test",
-    size = "small",
-    srcs = ["image_embedding_test.py"],
-    deps = [
-        ":image_embedding",
-    ],
 )
 
 py_library(
