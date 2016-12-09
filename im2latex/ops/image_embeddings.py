@@ -46,7 +46,7 @@ def _fc_f(inputs, num_outputs, initializer, reuse, scope):
 
 def cnn(inputs, config, initializer, is_training=True):
     with tf.variable_scope("cnn_input_1") as scope:
-        conv = _conv_f(inputs, 375, [1,2,2,1], [1,2,2,1], "SAME", initializer, False, True, scope)
+        conv = _conv_f(inputs, 375, [2,2], [2,2], "SAME", initializer, False, True, scope)
         max_pool = tf.contrib.layers.max_pool2d(conv, 2, 2, "SAME")
 
     with tf.variable_scope("cnn_hidden_1") as scope:
