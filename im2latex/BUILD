@@ -45,9 +45,9 @@ py_library(
     srcs = ["model.py"],
     srcs_version = "PY2AND3",
     deps = [
-        "//im2txt/ops:image_embedding",
-        "//im2txt/ops:image_processing",
-        "//im2txt/ops:inputs",
+        "//im2latex/ops:image_embeddings",
+        "//im2latex/ops:image_processing",
+        "//im2latex/ops:inputs",
     ],
 )
 
@@ -56,7 +56,7 @@ py_binary(
     srcs = ["train.py"],
     srcs_version = "PY2AND3",
     deps = [
-        ":configuration",
-        ":show_and_tell_model",
+        ":configurations",
+        ":model",
     ],
 )

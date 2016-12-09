@@ -23,9 +23,9 @@ from __future__ import print_function
 
 import tensorflow as tf
 
-from ops import image_embeddings as cnn
-from ops import image_processing
-from ops import inputs as input_ops
+from im2latex.ops import image_embeddings as cnn
+from im2latex.ops import image_processing
+from im2latex.ops import inputs as input_ops
 
 class ShowAttendTellModel(object):
     def __init__(self, mode, config):
