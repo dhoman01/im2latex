@@ -42,7 +42,7 @@ tf.logging.set_verbosity(tf.logging.INFO)
 
 def main(_):
     config = Configurations()
-
+    config.input_file_pattern = FLAGS.input_file_pattern
     g = tf.Graph()
     with g.as_default():
         model = Model("train", config)

@@ -33,7 +33,7 @@ class Configurations(object):
         self.clip_gradients = 5.0
         self.max_checkpoints_to_keep = 2
         self.train_dir = "train_dir"
-        self.input_file_pattern = "/home/dustin/im2latex/data_dir/*.tfrecords"
+        self.input_file_pattern = ""
         self.values_per_input_shard = 2300
         self.input_queue_capacity_factor = 2
         self.num_input_reader_threads = 1
