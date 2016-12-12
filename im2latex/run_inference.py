@@ -24,10 +24,10 @@ import os
 
 import tensorflow as tf
 
-from im2txt import configuration
-from im2txt import inference_wrapper
-from im2txt.inference_utils import caption_generator
-from im2txt.inference_utils import vocabulary
+from configurations import Configurations as configuration
+from im2latex import inference_wrapper
+from im2latex.inference_utils import caption_generator
+from im2latex.inference_utils import vocabulary
 
 FLAGS = tf.flags.FLAGS
 

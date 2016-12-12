@@ -21,8 +21,8 @@ from __future__ import print_function
 
 
 
-from im2txt import show_and_tell_model
-from im2txt.inference_utils import inference_wrapper_base
+from model import ShowAttendTellModel as Model
+from im2latex.inference_utils import inference_wrapper_base
 
 
 class InferenceWrapper(inference_wrapper_base.InferenceWrapperBase):
@@ -32,7 +32,7 @@ class InferenceWrapper(inference_wrapper_base.InferenceWrapperBase):
     super(InferenceWrapper, self).__init__()
 
   def build_model(self, model_config):
-    model = show_and_tell_model.ShowAndTellModel(model_config, mode="inference")
+    model = Model(model_config, mode="inference")
     model.build()
     return model
 
