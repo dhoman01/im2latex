@@ -76,7 +76,7 @@ py_binary(
     srcs = ["run_inference.py"],
     srcs_version = "PY2AND3",
     deps = [
-        ":configuration",
+        ":configurations",
         ":inference_wrapper",
         "//im2latex/inference_utils:caption_generator",
         "//im2latex/inference_utils:vocabulary",
