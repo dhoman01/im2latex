@@ -82,13 +82,13 @@ class ShowAttendTellModel(object):
                 image = self.process_image(encoded_image, thread_id=thread_id)
                 images_and_captions.append([image, caption])
 
-        # Batch inputs.
-        queue_capacity = (2 * self.config.num_preprocess_threads *
-            self.config.batch_size)
-        images, input_seqs, target_seqs, input_mask = (
-            input_ops.batch_with_dynamic_pad(images_and_captions,
-            batch_size=self.config.batch_size,
-            queue_capacity=queue_capacity))
+            # Batch inputs.
+            queue_capacity = (2 * self.config.num_preprocess_threads *
+                self.config.batch_size)
+            images, input_seqs, target_seqs, input_mask = (
+                input_ops.batch_with_dynamic_pad(images_and_captions,
+                batch_size=self.config.batch_size,
+                queue_capacity=queue_capacity))
 
         self.images = images
         self.input_seqs = input_seqs
