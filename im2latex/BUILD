@@ -60,3 +60,25 @@ py_binary(
         ":model",
     ],
 )
+
+py_library(
+    name = "inference_wrapper",
+    srcs = ["inference_wrapper.py"],
+    srcs_version = "PY2AND3",
+    deps = [
+        ":show_and_tell_model",
+        "//im2latex/inference_utils:inference_wrapper_base",
+    ],
+)
+
+py_binary(
+    name = "run_inference",
+    srcs = ["run_inference.py"],
+    srcs_version = "PY2AND3",
+    deps = [
+        ":configuration",
+        ":inference_wrapper",
+        "//im2latex/inference_utils:caption_generator",
+        "//im2latex/inference_utils:vocabulary",
+    ],
+)
