@@ -128,7 +128,7 @@ class ShowAttendTellModel(object):
 
         with tf.variable_scope("attend-tell", initializer=self.initializer) as attend_scope:
             zero_state = lstm_cell.zero_state(batch_size=self.image_embeddings.get_shape()[0], dtype=tf.float32)
-            _, initial_state = lstm_cell(self.image_embeddings, zero_state)
+            _, initial_state = lstm_cell(self.image_embeddings, tf.reshape(zero_state, [-1]))
 
             attend_scope.reuse_variables()
 
