@@ -71,16 +71,16 @@ class ShowAttendTellModel(object):
                 input_queue_capacity_factor=self.config.input_queue_capacity_factor,
                 num_reader_threads=self.config.num_input_reader_threads)
 
-        assert self.config.num_preprocess_threads % 2 == 0
-        images_and_captions = []
-        for thread_id in range(self.config.num_preprocess_threads):
-            serialized_sequence_example = input_queue.dequeue()
-            encoded_image, caption = input_ops.parse_sequence_example(
-                serialized_sequence_example,
-                image_feature=self.config.image_feature_name,
-                caption_feature=self.config.caption_feature_name)
-            image = self.process_image(encoded_image, thread_id=thread_id)
-            images_and_captions.append([image, caption])
+            assert self.config.num_preprocess_threads % 2 == 0
+            images_and_captions = []
+            for thread_id in range(self.config.num_preprocess_threads):
+                serialized_sequence_example = input_queue.dequeue()
+                encoded_image, caption = input_ops.parse_sequence_example(
+                    serialized_sequence_example,
+                    image_feature=self.config.image_feature_name,
+                    caption_feature=self.config.caption_feature_name)
+                image = self.process_image(encoded_image, thread_id=thread_id)
+                images_and_captions.append([image, caption])
 
         # Batch inputs.
         queue_capacity = (2 * self.config.num_preprocess_threads *
