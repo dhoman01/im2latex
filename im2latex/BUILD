@@ -45,9 +45,9 @@ py_library(
     srcs = ["model.py"],
     srcs_version = "PY2AND3",
     deps = [
-        "//im2txt/ops:image_embedding",
-        "//im2txt/ops:image_processing",
-        "//im2txt/ops:inputs",
+        "//im2latex/ops:image_embedding",
+        "//im2latex/ops:image_processing",
+        "//im2latex/ops:inputs",
     ],
 )
 
@@ -56,7 +56,29 @@ py_binary(
     srcs = ["train.py"],
     srcs_version = "PY2AND3",
     deps = [
-        ":configuration",
+        ":configurations",
+        ":model",
+    ],
+)
+
+py_library(
+    name = "inference_wrapper",
+    srcs = ["inference_wrapper.py"],
+    srcs_version = "PY2AND3",
+    deps = [
         ":show_and_tell_model",
+        "//im2latex/inference_utils:inference_wrapper_base",
+    ],
+)
+
+py_binary(
+    name = "run_inference",
+    srcs = ["run_inference.py"],
+    srcs_version = "PY2AND3",
+    deps = [
+        ":configuration",
+        ":inference_wrapper",
+        "//im2latex/inference_utils:caption_generator",
+        "//im2latex/inference_utils:vocabulary",
     ],
 )

@@ -5,19 +5,19 @@ licenses(["notice"])  # Apache 2.0
 exports_files(["LICENSE"])
 
 py_library(
-    name = "image_processing",
-    srcs = ["image_processing.py"],
+    name = "inference_wrapper_base",
+    srcs = ["inference_wrapper_base.py"],
     srcs_version = "PY2AND3",
 )
 
 py_library(
-    name = "image_embeddings",
-    srcs = ["image_embeddings.py"],
+    name = "vocabulary",
+    srcs = ["vocabulary.py"],
     srcs_version = "PY2AND3",
 )
 
 py_library(
-    name = "inputs",
-    srcs = ["inputs.py"],
+    name = "caption_generator",
+    srcs = ["caption_generator.py"],
     srcs_version = "PY2AND3",
 )
