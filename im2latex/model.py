@@ -111,7 +111,7 @@ class ShowAttendTellModel(object):
 
         self.seq_embeddings = seq_embeddings
 
-        lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(self.config.rnn_size)
+        lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(self.image_embeddings.get_shape()[0], dtype=tf.float32)
 
         if self.mode == "train":
             lstm_cell = tf.nn.rnn_cell.DropoutWrapper(lstm_cell,
