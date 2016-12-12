@@ -24,7 +24,7 @@ import os
 
 import tensorflow as tf
 
-from configurations import Configurations as configuration
+from configurations import Configurations
 from im2latex import inference_wrapper
 from im2latex.inference_utils import caption_generator
 from im2latex.inference_utils import vocabulary
@@ -45,7 +45,7 @@ def main(_):
   g = tf.Graph()
   with g.as_default():
     model = inference_wrapper.InferenceWrapper()
-    restore_fn = model.build_graph_from_config(configuration.ModelConfig(),
+    restore_fn = model.build_graph_from_config(Configurations(),
                                                FLAGS.checkpoint_path)
   g.finalize()
 
