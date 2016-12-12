@@ -120,7 +120,7 @@ class ShowAttendTellModel(object):
 
         # lstm_cell = tf.contrib.rnn.AttentionCellWrapper(lstm_cell, 1, input_size=self.config.embedding_size, state_is_tuple=True)
 
-        if self.config.rnn_layers > 1:
+        if self.config.rnn_layers > 1 and self.is_training():
             lstm_cell = tf.nn.rnn_cell.MultiRNNCell([lstm_cell] * self.config.rnn_layers)
 
 
@@ -128,7 +128,7 @@ class ShowAttendTellModel(object):
 
         with tf.variable_scope("attend-tell", initializer=self.initializer) as attend_scope:
             zero_state = lstm_cell.zero_state(batch_size=self.image_embeddings.get_shape()[0], dtype=tf.float32)
-            _, initial_state = lstm_cell(tf.expand_dims(self.image_embeddings, 0), zero_state)
+            _, initial_state = lstm_cell(self.image_embeddings), zero_state)
 
             attend_scope.reuse_variables()
 
