@@ -32,7 +32,7 @@ class InferenceWrapper(inference_wrapper_base.InferenceWrapperBase):
     super(InferenceWrapper, self).__init__()
 
   def build_model(self, model_config):
-    model = Model(model_config, mode="inference")
+    model = Model("inference", model_config)
     model.build()
     return model
 
