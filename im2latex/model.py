@@ -111,7 +111,7 @@ class ShowAttendTellModel(object):
 
         self.seq_embeddings = seq_embeddings
 
-        lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(self.image_embeddings.get_shape()[0], dtype=tf.float32)
+        lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(self.config.rnn_size)
 
         if self.mode == "train":
             lstm_cell = tf.nn.rnn_cell.DropoutWrapper(lstm_cell,
@@ -127,7 +127,7 @@ class ShowAttendTellModel(object):
         self.lstm_cell = lstm_cell
 
         with tf.variable_scope("attend-tell", initializer=self.initializer) as attend_scope:
-            zero_state = lstm_cell.zero_state(batch_size=self.config.batch_size, dtype=tf.float32)
+            zero_state = lstm_cell.zero_state(batch_size=self.image_embeddings.get_shape()[0], dtype=tf.float32)
             _, initial_state = lstm_cell(self.image_embeddings, zero_state)
 
             attend_scope.reuse_variables()
