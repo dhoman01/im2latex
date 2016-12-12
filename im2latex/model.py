@@ -128,7 +128,7 @@ class ShowAttendTellModel(object):
 
         with tf.variable_scope("attend-tell", initializer=self.initializer) as attend_scope:
             zero_state = lstm_cell.zero_state(batch_size=self.image_embeddings.get_shape()[0], dtype=tf.float32)
-            _, initial_state = lstm_cell(tf.expand_dims(self.image_embeddings, 1), zero_state)
+            _, initial_state = lstm_cell(tf.expand_dims(self.image_embeddings, 0), zero_state)
 
             attend_scope.reuse_variables()
 
@@ -139,7 +139,7 @@ class ShowAttendTellModel(object):
 
                 # Placeholder for feeding a batch of concatenated states.
                 state_feed = tf.placeholder(dtype=tf.float32,
-                    shape=[None, sum(lstm_cell.state_size)],
+                    shape=[None, None],
                     name="state_feed")
                 state_tuple = tf.split(1, 2, state_feed)
 
