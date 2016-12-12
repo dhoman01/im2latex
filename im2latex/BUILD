@@ -66,7 +66,7 @@ py_library(
     srcs = ["inference_wrapper.py"],
     srcs_version = "PY2AND3",
     deps = [
-        ":show_and_tell_model",
+        ":model",
         "//im2latex/inference_utils:inference_wrapper_base",
     ],
 )
