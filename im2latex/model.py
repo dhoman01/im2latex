@@ -118,7 +118,7 @@ class ShowAttendTellModel(object):
                             input_keep_prob=self.config.lstm_dropout_keep_prob,
                             output_keep_prob=self.config.lstm_dropout_keep_prob)
 
-        # lstm_cell = tf.contrib.rnn.AttentionCellWrapper(lstm_cell, 1, input_size=self.config.embedding_size, state_is_tuple=True)
+        lstm_cell = tf.contrib.rnn.AttentionCellWrapper(lstm_cell, 1, input_size=self.config.embedding_size, state_is_tuple=True)
 
         if self.config.rnn_layers > 1 and self.is_training():
             lstm_cell = tf.nn.rnn_cell.MultiRNNCell([lstm_cell] * self.config.rnn_layers)
